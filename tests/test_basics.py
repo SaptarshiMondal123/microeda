@@ -3,12 +3,13 @@ import csv
 import tempfile
 from pathlib import Path
 
-import pytest
-import numpy as np
-import pandas as pd
+import pytest # type: ignore
+import numpy as np # type: ignore
+import pandas as pd # type: ignore
 
 import microeda.core as core
 import microeda.report as report
+
 
 # --------------------------------------------------------------------
 # Helpers
@@ -73,3 +74,15 @@ def test_missing_values_flagged():
     summary = core.analyze(df)
     col = summary["columns"][0]
     assert col["missing_percent"] > 0
+
+def test_analyze_table_prints_table(capsys):
+    """
+    Smoke-test that analyze_table prints a readable table and
+    does not raise any exception.
+    """
+    df = tiny_dataframe()
+    core.analyze_table(df)
+    captured = capsys.readouterr()
+    # Check that at least one column name appears in the printed table
+    for col in df.columns:
+        assert col in captured.out

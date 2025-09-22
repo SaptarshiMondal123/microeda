@@ -1,8 +1,8 @@
 from typing import Any, Dict
 try:
-    from rich.console import Console
-    from rich.table import Table
-    from rich.panel import Panel
+    from rich.console import Console # type: ignore
+    from rich.table import Table # type: ignore
+    from rich.panel import Panel # type: ignore
     RICH_AVAILABLE = True
     console = Console()
 except Exception:
@@ -47,6 +47,7 @@ def _print_table_from_summaries(summaries: Dict[str,Any]):
             elif t == 'text':
                 sample = f"avg_tokens={desc.get('avg_tokens',0):.2f}"
             print(f"{col:30.30} {t:10} {miss:8} {uniq:8} {sample}")
+
 
 def render_report(res: Dict[str,Any], style: str = 'terminal') -> str:
     """
@@ -106,7 +107,7 @@ def render_report(res: Dict[str,Any], style: str = 'terminal') -> str:
         md = render_report(res, style='md')
         # very simple markdown to html conversion
         try:
-            import markdown
+            import markdown # type: ignore
             return markdown.markdown(md)
         except Exception:
             # fallback: naive replacements

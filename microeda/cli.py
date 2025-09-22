@@ -1,6 +1,6 @@
 import sys
 import argparse
-import pandas as pd
+import pandas as pd # type: ignore
 from .core import analyze
 from .report import render_report
 
