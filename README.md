@@ -1,26 +1,39 @@
-# microeda  
+# 🚀 microeda
 
-**microeda** is an ultra-lightweight Python library for Exploratory Data Analysis (EDA) on small datasets. It provides quick insights into your data with minimal setup—detecting column types, summarizing distributions, spotting missing values, outliers, and exploring pairwise relationships.  
+[![PyPI version](https://img.shields.io/pypi/v/microeda?color=blue&label=PyPI)](https://pypi.org/project/microeda/) 
+[![Python Versions](https://img.shields.io/pypi/pyversions/microeda)](https://pypi.org/project/microeda/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![GitHub Issues](https://img.shields.io/github/issues/SaptarshiMondal123/microeda)](https://github.com/SaptarshiMondal123/microeda/issues)
 
----
-
-## ✨ Features  
-
-- Detect column types: **numeric, categorical, boolean, datetime, text, or IDs**  
-- Summarize numeric columns: mean, std, quartiles, missing values, outliers  
-- Summarize categorical columns: top values, unique counts  
-- Summarize datetime columns: min, max, missing values  
-- Quick text analysis: token counts, most frequent words  
-- Missing value patterns and pairwise missing correlations  
-- Outlier detection: **IQR** and **Z-score** methods  
-- Pairwise hints for correlations and associations (Pearson, Cramer's V, Mutual Information)  
-- Command-line interface (CLI) for generating reports in **Markdown** or **HTML**  
+**microeda** is an ultra-lightweight Python library for **Exploratory Data Analysis (EDA)** on small datasets (<10k rows). Get deep insights into your data **instantly**—detect column types, summarize statistics, spot missing values & outliers, and explore relationships.
 
 ---
 
-## 📦 Installation  
+## ✨ Features
 
-Install via PyPI:  
+- **Automatic Column Typing**: `numeric`, `categorical`, `boolean`, `datetime`, `text`, `ID`.
+- **Smart Summaries**:
+  - **Numeric:** mean, median, quartiles, missing values, outliers
+  - **Categorical:** unique counts, top values
+  - **Datetime:** min, max, range, missing
+  - **Text:** token counts, top words
+- **Missing Data Analysis**:
+  - Column-level missing percentages
+  - Pairwise missing correlations
+- **Outlier Detection**:
+  - IQR method
+  - Z-score method
+- **Pairwise Relationships**:
+  - Pearson for numeric
+  - Mutual Information & Cramer's V for categorical
+- **CLI Support**: Generate **Markdown** or **HTML** reports
+- **Dependency-light**: Only `pandas` & `numpy` required, optional `rich` for pretty CLI
+
+---
+
+## 📦 Installation
+
+**From PyPI:**
 
 ```bash
 pip install microeda
@@ -45,13 +58,21 @@ from microeda import analyze
 df = pd.read_csv("your_data.csv")
 report = analyze(df, name="My Dataset")
 
-# View summaries
-print(report["summaries"])
-# View column types
+# Inspect your data
 print(report["column_types"])
-# Missing values and pairwise hints
+print(report["summaries"])
 print(report["missingness"])
 print(report["pairwise_hints"])
+```
+
+…will only give you raw dicts, no table.
+
+If you want a readable table like the demo output, you should do:
+
+```
+from microeda import analyze_table
+
+analyze_table(df, name="My Dataset")
 ```
 
 ### CLI
@@ -60,6 +81,7 @@ Generate a Markdown report directly from the terminal:
 
 ```bash
 microeda path/to/data.csv --style md --out report.md
+microeda path/to/data.csv --style html --out report.html
 ```
 
 Options:
@@ -69,6 +91,18 @@ Options:
 
 --out: output file path
 ```
+### 🌟 Example Output
+Dataset: 100 rows x 5 cols
+
+Column Summary:
+| Column | Type        | Unique | Missing | Sample Stats          |
+|--------|------------|--------|---------|----------------------|
+| Age    | numeric     | 30     | 0       | mean=29.8            |
+| Gender | categorical | 2      | 5       | Male:55, Female:40   |
+| Name   | text        | 95     | 0       | avg_tokens=2         |
+| Salary | numeric     | 50     | 2       | mean=55000           |
+| City   | text        | 10     | 0       | avg_tokens=1         |
+
 
 ## Contributing
 
