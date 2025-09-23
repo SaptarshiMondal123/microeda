@@ -6,7 +6,7 @@ import webbrowser
 from .core import analyze
 from .report import render_report
 
-def cli():
+def main():
     p = argparse.ArgumentParser(description='MicroEDA — lightweight EDA')
     p.add_argument('input', help='CSV file or - for stdin')
     p.add_argument('--name', default=None, help='Dataset name')
@@ -58,4 +58,4 @@ def cli():
             print("plotly not installed. Run `pip install plotly` to enable interactive plots.")
 
 if __name__ == "__main__":
-    cli()
+    main()
