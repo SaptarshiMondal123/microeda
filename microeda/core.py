@@ -2,6 +2,7 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, Optional
 from collections import Counter
+import json
 
 import numpy as np # type: ignore
 import pandas as pd # type: ignore
@@ -27,6 +28,32 @@ def try_cast_numeric(s: pd.Series, tol: float = 0.95) -> bool:
     converted = pd.to_numeric(non_na, errors="coerce")
     return converted.notna().mean() >= tol
 
+def is_semi_structured(s: pd.Series) -> str | None:
+    """
+    Detect if a column is semi-structured (list, tuple, dict, JSON-like string).
+    Returns "semi-structured" or "json-string" if detected, else None.
+    """
+    sample = s.dropna().head(10)
+
+    if sample.empty:
+        return None
+
+    # Check for Python objects
+    if sample.apply(lambda x: isinstance(x, (list, tuple, dict))).any():
+        return "semi-structured"
+
+    # Check for JSON-like strings
+    import json
+    def looks_like_json(x):
+        if not isinstance(x, str):
+            return False
+        x = x.strip()
+        return x.startswith("{") or x.startswith("[")
+
+    if sample.apply(looks_like_json).any():
+        return "json-string"
+
+    return None
 
 # ---------- column typing ----------
 def detect_column_type(s: pd.Series) -> str:
@@ -43,6 +70,10 @@ def detect_column_type(s: pd.Series) -> str:
     if try_cast_numeric(s):
         return "numeric" if s.nunique(dropna=True) > 20 else "categorical"
 
+    stype = is_semi_structured(s)
+    if stype:                      # <-- this is the new hook
+        return stype
+    
     avg_len = s.dropna().astype(str).map(len).mean() if len(s.dropna()) else 0
     uniq = s.nunique(dropna=True)
     if avg_len > 50 or uniq / max(1, len(s)) > 0.5:
@@ -117,6 +148,24 @@ def summarize_text(s: pd.Series, topk: int = 10) -> Dict[str, Any]:
         "top_words": dict(words.most_common(topk)),
     }
 
+def summarize_semi_structured(s: pd.Series) -> Dict[str, Any]:
+    return {
+        "count": int(s.count()),
+        "n_missing": int(s.isna().sum()),
+        "example": s.dropna().astype(str).sample(1, random_state=1).iloc[0]
+    }
+
+def safe_nunique(s: pd.Series) -> int:
+    """
+    Like pandas nunique but works even if elements are unhashable
+    (e.g. lists/dicts).  Falls back to comparing stringified values.
+    """
+    try:
+        return int(s.nunique(dropna=True))
+    except TypeError:
+        return len(set(map(lambda x: json.dumps(x, sort_keys=True)
+                           if isinstance(x, (dict, list)) else str(x),
+                           s.dropna())))
 
 # ---------- Missingness ----------
 def missingness_summary(df: pd.DataFrame, topk: int = 10) -> Dict[str, Any]:
@@ -260,11 +309,15 @@ def pairwise_hints(df: pd.DataFrame, types: Dict[str, str], topk: int = 10) -> D
 
 
 # ---------- main engine ----------
-def analyze(df: pd.DataFrame,
-            name: Optional[str] = None,
-            config: Optional[Dict] = None) -> Dict[str, Any]:
+def analyze(
+    df: pd.DataFrame,
+    name: Optional[str] = None,
+    config: Optional[Dict] = None,
+    target_column: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Run full micro-EDA and return a nested dictionary with results.
+    Adds optional data quality alerts (high cardinality, duplicates, target correlation).
     """
     if config is None:
         config = {}
@@ -279,6 +332,7 @@ def analyze(df: pd.DataFrame,
     col_types: Dict[str, str] = {}
     summaries: Dict[str, Dict[str, Any]] = {}
 
+    # ---------- Column Summaries ----------
     for col in df.columns:
         s = df[col]
         ctype = detect_column_type(s)
@@ -293,28 +347,73 @@ def analyze(df: pd.DataFrame,
             desc = summarize_datetime(s)
         elif ctype == "text":
             desc = summarize_text(s)
+        elif ctype in ("semi-structured", "json-string"):
+            desc = summarize_semi_structured(s)
         else:
             desc = {"count": int(s.count())}
 
         desc.update({
             "type": ctype,
             "n_missing": int(s.isna().sum()),
-            "pct_missing": round(100 * s.isna().sum() / max(1, len(df)), 3),
-            "n_unique": int(s.nunique(dropna=True)),
+            "pct_missing": round(100 * s.isna().sum() / max(1, nrows), 3),
+            "n_unique": safe_nunique(s),
         })
-
         summaries[col] = desc
 
+    # ---------- Store Summaries ----------
     out["column_types"] = col_types
     out["summaries"] = summaries
     out["missingness"] = missingness_summary(df)
     out["pairwise_hints"] = pairwise_hints(df, col_types, topk=20)
+
+    # ---------- Data Quality Alerts ----------
+    alerts = []
+
+    # High cardinality for categoricals/text
+    for col, t in col_types.items():
+        if t in ("categorical", "text"):
+            n_unique = summaries[col]["n_unique"]
+            if n_unique > 0.5 * nrows:
+                alerts.append({"column": col, "issue": "High cardinality"})
+
+    # Duplicate rows (handle unhashable types)
+    df_hashable = df.copy()
+    for col in df_hashable.columns:
+        df_hashable[col] = df_hashable[col].apply(lambda x: tuple(x) if isinstance(x, list) else x)
+
+    dup_rows = nrows - len(df_hashable.drop_duplicates())
+    if dup_rows > 0:
+        alerts.append({"dataset": True, "issue": f"{dup_rows} duplicate rows"})
+
+    # Optional: highly correlated with target
+    if target_column and target_column in df.columns:
+        for col in df.columns:
+            if col == target_column:
+                continue
+            if col_types[col] == "numeric" and col_types[target_column] == "numeric":
+                corr = df[col].corr(df[target_column])
+                if abs(corr) > 0.9:
+                    alerts.append({
+                        "column": col,
+                        "issue": f"Highly correlated with target ({corr:.2f})"
+                    })
+
+    out["alerts"] = alerts
+
+    # ---------- Global Metrics ----------
     out["global"] = {
         "n_null_rows": int(df.isna().all(axis=1).sum()),
-        "cols_all_unique": [c for c in df.columns if df[c].nunique(dropna=True) == len(df)],
+        "cols_all_unique": [c for c in df.columns if safe_nunique(df[c]) == len(df)],
+        "pct_text_columns": round(
+            100 * sum(1 for t in col_types.values() if t == "text") / max(1, ncols), 2
+        ),
+        "n_duplicate_rows": int(dup_rows),
+        "data_quality_score": round(
+            100 * (1 - len(alerts) / max(1, ncols)), 2
+        )  # simple heuristic
     }
 
-    # Provide "columns" list for easier iteration
+    # ---------- Columns List ----------
     out["columns"] = [
         {
             "name": col,

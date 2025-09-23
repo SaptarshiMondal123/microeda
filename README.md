@@ -28,6 +28,8 @@
   - Mutual Information & Cramer's V for categorical
 - **CLI Support**: Generate **Markdown** or **HTML** reports
 - **Dependency-light**: Only `pandas` & `numpy` required, optional `rich` for pretty CLI
+- **Semi-structured Data Support**: Detect columns with JSON-like or list-like structures
+
 
 ---
 
